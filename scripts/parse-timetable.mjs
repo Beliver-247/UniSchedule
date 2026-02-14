@@ -82,6 +82,50 @@ const addEvent = (bucket, event) => {
   });
 };
 
+const toMinutes = (time) => {
+  const [hours, minutes] = time.split(':').map((value) => Number(value));
+  return hours * 60 + minutes;
+};
+
+const mergeContiguousEvents = (events) => {
+  const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const dayIndex = new Map(dayOrder.map((day, index) => [day, index]));
+
+  const sorted = [...events].sort((a, b) => {
+    const dayDiff = (dayIndex.get(a.day) ?? 0) - (dayIndex.get(b.day) ?? 0);
+    if (dayDiff !== 0) {
+      return dayDiff;
+    }
+    return toMinutes(a.start) - toMinutes(b.start);
+  });
+
+  const merged = [];
+  sorted.forEach((event) => {
+    const last = merged[merged.length - 1];
+    if (!last) {
+      merged.push({ ...event });
+      return;
+    }
+
+    const lastEnd = toMinutes(last.start) + last.durationMinutes;
+    const currentStart = toMinutes(event.start);
+    const sameDetails =
+      last.day === event.day &&
+      last.title === event.title &&
+      last.location === event.location &&
+      last.description === event.description;
+
+    if (sameDetails && lastEnd === currentStart) {
+      last.durationMinutes += event.durationMinutes;
+      return;
+    }
+
+    merged.push({ ...event });
+  });
+
+  return merged;
+};
+
 tables.forEach((table) => {
   const groupHeader = table.querySelector('thead tr th[colspan]');
   const mainGroup = groupHeader ? groupHeader.text.trim() : 'Unknown';
@@ -162,7 +206,7 @@ tables.forEach((table) => {
 
   if (subgroupEvents.size > 0) {
     subgroupEvents.forEach((events, subgroup) => {
-      const mergedEvents = [...sharedEvents, ...events];
+      const mergedEvents = mergeContiguousEvents([...sharedEvents, ...events]);
       groups.push({
         id: subgroup,
         label: `${subgroup} (${mainGroup})`,
@@ -175,7 +219,7 @@ tables.forEach((table) => {
       id: mainGroup,
       label: mainGroup,
       parentGroup: mainGroup,
-      events: sharedEvents,
+      events: mergeContiguousEvents(sharedEvents),
     });
   }
 });

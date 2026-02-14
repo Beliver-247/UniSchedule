@@ -24,7 +24,16 @@ type TimetableData = {
   groups: TimetableGroup[];
 };
 
-const timetableData = require('./src/data/timetables.json') as TimetableData;
+const weekdayTimetables = require('./src/data/timetables-weekday.json') as TimetableData;
+const weekendTimetables = require('./src/data/timetables-weekend.json') as TimetableData;
+
+const timetableData: TimetableData = {
+  generatedAt:
+    weekdayTimetables.generatedAt > weekendTimetables.generatedAt
+      ? weekdayTimetables.generatedAt
+      : weekendTimetables.generatedAt,
+  groups: [...weekdayTimetables.groups, ...weekendTimetables.groups],
+};
 
 const SEMESTER_START = '2026-01-19';
 const SEMESTER_END = '2026-05-30';
@@ -260,18 +269,27 @@ export default function App() {
   return (
     <View style={styles.appShell}>
       <StatusBar style="light" />
+      <View style={styles.backgroundGlowTop} />
+      <View style={styles.backgroundGlowBottom} />
       <ScrollView contentContainerStyle={[
         styles.scrollContent,
         isSmallScreen && styles.scrollContentCompact,
       ]}>
         <View style={[styles.heroCard, isSmallScreen && styles.heroCardCompact]}>
+          <View style={styles.heroPillRow}>
+            <Text style={styles.heroPill}>Timetable Assistant</Text>
+            <Text style={styles.heroPillMuted}>Web Export</Text>
+          </View>
           <Text style={[styles.title, isSmallScreen && styles.titleCompact]}>UniSchedule</Text>
           <Text style={[styles.subtitle, isSmallScreen && styles.subtitleCompact]}>
             Choose your timetable and generate calendar events in one click.
           </Text>
-          <Text style={[styles.metaLine, isSmallScreen && styles.metaLineCompact]}>
-            Semester: {SEMESTER_START} to {SEMESTER_END}
-          </Text>
+          <View style={styles.metaRow}>
+            <Text style={[styles.metaLine, isSmallScreen && styles.metaLineCompact]}>
+              Semester: {SEMESTER_START} to {SEMESTER_END}
+            </Text>
+            <Text style={styles.metaBadge}>Local time</Text>
+          </View>
         </View>
 
         <View style={[styles.panel, isSmallScreen && styles.panelCompact]}>
@@ -354,9 +372,12 @@ export default function App() {
           </View>
 
           <Pressable style={[styles.primaryButton, isSmallScreen && styles.primaryButtonCompact]} onPress={handleDownload}>
-            <Text style={[styles.primaryButtonText, isSmallScreen && styles.primaryButtonTextCompact]}>
-              Download .ics Calendar
-            </Text>
+            <View style={styles.primaryButtonContent}>
+              <Text style={[styles.primaryButtonText, isSmallScreen && styles.primaryButtonTextCompact]}>
+                Download .ics Calendar
+              </Text>
+              <Text style={styles.primaryButtonHint}>Works with Google, Apple, Outlook</Text>
+            </View>
           </Pressable>
 
           <Text style={styles.helperText}>
@@ -404,7 +425,27 @@ export default function App() {
 const styles = StyleSheet.create({
   appShell: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#0b1220',
+  },
+  backgroundGlowTop: {
+    position: 'absolute',
+    top: -120,
+    left: -120,
+    width: 260,
+    height: 260,
+    borderRadius: 140,
+    backgroundColor: '#1d4ed8',
+    opacity: 0.18,
+  },
+  backgroundGlowBottom: {
+    position: 'absolute',
+    bottom: -160,
+    right: -140,
+    width: 300,
+    height: 300,
+    borderRadius: 180,
+    backgroundColor: '#f97316',
+    opacity: 0.12,
   },
   scrollContent: {
     padding: 24,
@@ -418,7 +459,7 @@ const styles = StyleSheet.create({
   heroCard: {
     width: '100%',
     maxWidth: 720,
-    backgroundColor: '#111827',
+    backgroundColor: '#0f172a',
     borderRadius: 24,
     paddingVertical: 28,
     paddingHorizontal: 24,
@@ -428,6 +469,32 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 8 },
+  },
+  heroPillRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  heroPill: {
+    backgroundColor: '#1d4ed8',
+    color: '#e0f2fe',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+  },
+  heroPillMuted: {
+    backgroundColor: '#1f2937',
+    color: '#cbd5f5',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.4,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
   },
   heroCardCompact: {
     borderRadius: 20,
@@ -455,15 +522,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
-  metaLine: {
+  metaRow: {
     marginTop: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  metaLine: {
     fontSize: 13,
     color: '#94a3b8',
     letterSpacing: 0.4,
+    flex: 1,
   },
   metaLineCompact: {
-    marginTop: 12,
     fontSize: 12,
+  },
+  metaBadge: {
+    backgroundColor: '#111827',
+    color: '#e2e8f0',
+    fontSize: 11,
+    fontWeight: '600',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 999,
   },
   panel: {
     width: '100%',
@@ -471,6 +553,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
     borderRadius: 24,
     padding: 24,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   panelCompact: {
     borderRadius: 20,
@@ -492,6 +576,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
     backgroundColor: '#ffffff',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
   picker: {
     width: '100%',
@@ -519,6 +607,7 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontWeight: '600',
     letterSpacing: 0.3,
+    textTransform: 'uppercase',
   },
   summaryRow: {
     marginTop: 16,
@@ -527,6 +616,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#e2e8f0',
     flexDirection: 'row',
     justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
   summaryRowCompact: {
     marginTop: 12,
@@ -547,10 +638,18 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: '#f97316',
     alignItems: 'center',
+    shadowColor: '#ea580c',
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
   },
   primaryButtonCompact: {
     marginTop: 14,
     paddingVertical: 12,
+  },
+  primaryButtonContent: {
+    alignItems: 'center',
+    gap: 4,
   },
   primaryButtonText: {
     color: '#0f172a',
@@ -560,6 +659,11 @@ const styles = StyleSheet.create({
   },
   primaryButtonTextCompact: {
     fontSize: 15,
+  },
+  primaryButtonHint: {
+    color: '#111827',
+    fontSize: 11,
+    opacity: 0.7,
   },
   helperText: {
     marginTop: 12,
@@ -578,6 +682,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
   },
   dayTitle: {
     fontSize: 16,
