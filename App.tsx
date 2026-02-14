@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
-import { forwardRef, useEffect, useMemo, useState, type ChangeEvent, type CSSProperties } from 'react';
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
 
@@ -147,37 +147,6 @@ if (Platform.OS === 'web') {
 const WebDatePicker =
   Platform.OS === 'web' ? (require('react-datepicker').default as React.ComponentType<any>) : null;
 
-const webInputStyle: CSSProperties = {
-  width: '100%',
-  maxWidth: '100%',
-  boxSizing: 'border-box',
-  display: 'block',
-  borderRadius: 14,
-  border: '1px solid #e2e8f0',
-  padding: '10px 12px',
-  fontSize: '14px',
-  color: '#0f172a',
-  backgroundColor: '#ffffff',
-};
-
-type WebDateInputProps = {
-  value?: string;
-  onClick?: () => void;
-  onChange?: (event: ChangeEvent<HTMLInputElement>) => void;
-};
-
-const WebDateInput = forwardRef<HTMLInputElement, WebDateInputProps>(({ value, onClick, onChange }, ref) => (
-  <input
-    ref={ref}
-    value={value ?? ''}
-    onClick={onClick}
-    onChange={onChange}
-    readOnly
-    style={webInputStyle}
-  />
-));
-WebDateInput.displayName = 'WebDateInput';
-
 const parseGroupMeta = (group: TimetableGroup) => {
   const baseId = group.parentGroup || group.id;
   const parts = baseId.split('.');
@@ -255,6 +224,7 @@ export default function App() {
   const [endDate, setEndDate] = useState(parseDateOnly(SEMESTER_END));
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
+  const [activeWebPicker, setActiveWebPicker] = useState<'start' | 'end' | null>(null);
 
   useEffect(() => {
     if (yearOptions.length > 0 && !yearOptions.includes(yearKey)) {
@@ -439,12 +409,9 @@ export default function App() {
             <View style={styles.dateField}>
               <Text style={styles.filterLabel}>Start date</Text>
               {Platform.OS === 'web' && WebDatePicker ? (
-                <WebDatePicker
-                  selected={startDate}
-                  onChange={(date: Date | null) => date && setStartDate(date)}
-                  dateFormat="yyyy-MM-dd"
-                  customInput={<WebDateInput />}
-                />
+                <Pressable style={styles.dateButton} onPress={() => setActiveWebPicker('start')}>
+                  <Text style={styles.dateButtonText}>{formatDateInput(startDate)}</Text>
+                </Pressable>
               ) : (
                 <>
                   <Pressable style={styles.dateButton} onPress={() => setShowStartPicker(true)}>
@@ -471,12 +438,9 @@ export default function App() {
             <View style={styles.dateField}>
               <Text style={styles.filterLabel}>End date</Text>
               {Platform.OS === 'web' && WebDatePicker ? (
-                <WebDatePicker
-                  selected={endDate}
-                  onChange={(date: Date | null) => date && setEndDate(date)}
-                  dateFormat="yyyy-MM-dd"
-                  customInput={<WebDateInput />}
-                />
+                <Pressable style={styles.dateButton} onPress={() => setActiveWebPicker('end')}>
+                  <Text style={styles.dateButtonText}>{formatDateInput(endDate)}</Text>
+                </Pressable>
               ) : (
                 <>
                   <Pressable style={styles.dateButton} onPress={() => setShowEndPicker(true)}>
@@ -501,6 +465,38 @@ export default function App() {
               )}
             </View>
           </View>
+          {Platform.OS === 'web' && WebDatePicker ? (
+            <Modal
+              transparent
+              visible={activeWebPicker !== null}
+              onRequestClose={() => setActiveWebPicker(null)}
+              animationType="fade"
+            >
+              <View style={styles.modalOverlay}>
+                <Pressable style={StyleSheet.absoluteFill} onPress={() => setActiveWebPicker(null)} />
+                <View style={styles.modalCard}>
+                  <Text style={styles.modalTitle}>
+                    {activeWebPicker === 'start' ? 'Select start date' : 'Select end date'}
+                  </Text>
+                  <WebDatePicker
+                    selected={activeWebPicker === 'start' ? startDate : endDate}
+                    onChange={(date: Date | null) => {
+                      if (!date) {
+                        return;
+                      }
+                      if (activeWebPicker === 'start') {
+                        setStartDate(date);
+                      } else {
+                        setEndDate(date);
+                      }
+                      setActiveWebPicker(null);
+                    }}
+                    inline
+                  />
+                </View>
+              </View>
+            </Modal>
+          ) : null}
 
           <Pressable
             style={[
@@ -796,6 +792,30 @@ const styles = StyleSheet.create({
   dateButtonText: {
     fontSize: 14,
     color: '#0f172a',
+  },
+  modalOverlay: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    padding: 16,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
+    padding: 16,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+  },
+  modalTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0f172a',
+    marginBottom: 12,
   },
   primaryButton: {
     marginTop: 18,
