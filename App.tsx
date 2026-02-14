@@ -1,6 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useMemo, useState } from 'react';
+import { forwardRef, useEffect, useMemo, useState, type ChangeEvent, type CSSProperties } from 'react';
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
 
 type TimetableEvent = {
@@ -55,6 +56,15 @@ const formatDateTimeLocal = (date: Date) => {
     pad(date.getMonth() + 1),
     pad(date.getDate()),
   ].join('') + `T${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+};
+
+const formatDateInput = (date: Date) => {
+  const pad = (value: number) => `${value}`.padStart(2, '0');
+  return [
+    date.getFullYear(),
+    pad(date.getMonth() + 1),
+    pad(date.getDate()),
+  ].join('-');
 };
 
 const formatDateTimeUtc = (date: Date) => {
@@ -130,6 +140,44 @@ const buildIcs = (group: TimetableGroup, startDate: string, endDate: string) => 
 
 const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
+if (Platform.OS === 'web') {
+  require('react-datepicker/dist/react-datepicker.css');
+}
+
+const WebDatePicker =
+  Platform.OS === 'web' ? (require('react-datepicker').default as React.ComponentType<any>) : null;
+
+const webInputStyle: CSSProperties = {
+  width: '100%',
+  maxWidth: '100%',
+  boxSizing: 'border-box',
+  display: 'block',
+  borderRadius: 14,
+  border: '1px solid #e2e8f0',
+  padding: '10px 12px',
+  fontSize: '14px',
+  color: '#0f172a',
+  backgroundColor: '#ffffff',
+};
+
+type WebDateInputProps = {
+  value?: string;
+  onClick?: () => void;
+  onChange?: (event: ChangeEvent<HTMLInputElement>) => void;
+};
+
+const WebDateInput = forwardRef<HTMLInputElement, WebDateInputProps>(({ value, onClick, onChange }, ref) => (
+  <input
+    ref={ref}
+    value={value ?? ''}
+    onClick={onClick}
+    onChange={onChange}
+    readOnly
+    style={webInputStyle}
+  />
+));
+WebDateInput.displayName = 'WebDateInput';
+
 const parseGroupMeta = (group: TimetableGroup) => {
   const baseId = group.parentGroup || group.id;
   const parts = baseId.split('.');
@@ -203,6 +251,10 @@ export default function App() {
   }, [groupMeta, yearKey, mode, specialization]);
 
   const [selectedId, setSelectedId] = useState(groupOptions[0]?.id ?? '');
+  const [startDate, setStartDate] = useState(parseDateOnly(SEMESTER_START));
+  const [endDate, setEndDate] = useState(parseDateOnly(SEMESTER_END));
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
 
   useEffect(() => {
     if (yearOptions.length > 0 && !yearOptions.includes(yearKey)) {
@@ -229,6 +281,13 @@ export default function App() {
   }, [groupOptions, selectedId]);
 
   const selectedGroup = groups.find((group) => group.id === selectedId);
+  const dateRangeError = useMemo(() => {
+    if (startDate > endDate) {
+      return 'End date must be on or after start date.';
+    }
+    return '';
+  }, [startDate, endDate]);
+  const canDownload = Boolean(selectedGroup) && !dateRangeError;
   const eventsByDay = useMemo(() => {
     if (!selectedGroup) {
       return [] as Array<{ day: string; events: TimetableEvent[] }>;
@@ -251,12 +310,17 @@ export default function App() {
       return;
     }
 
+    if (dateRangeError) {
+      Alert.alert('Invalid date range', dateRangeError);
+      return;
+    }
+
     if (Platform.OS !== 'web') {
       Alert.alert('Web only', 'ICS downloads are only available on web builds.');
       return;
     }
 
-    const content = buildIcs(selectedGroup, SEMESTER_START, SEMESTER_END);
+    const content = buildIcs(selectedGroup, formatDateInput(startDate), formatDateInput(endDate));
     const blob = new Blob([content], { type: 'text/calendar;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -371,7 +435,82 @@ export default function App() {
             <Text style={styles.summaryValue}>{selectedGroup?.events.length ?? 0}</Text>
           </View>
 
-          <Pressable style={[styles.primaryButton, isSmallScreen && styles.primaryButtonCompact]} onPress={handleDownload}>
+          <View style={[styles.dateRangeRow, isSmallScreen && styles.dateRangeRowCompact]}>
+            <View style={styles.dateField}>
+              <Text style={styles.filterLabel}>Start date</Text>
+              {Platform.OS === 'web' && WebDatePicker ? (
+                <WebDatePicker
+                  selected={startDate}
+                  onChange={(date: Date | null) => date && setStartDate(date)}
+                  dateFormat="yyyy-MM-dd"
+                  customInput={<WebDateInput />}
+                />
+              ) : (
+                <>
+                  <Pressable style={styles.dateButton} onPress={() => setShowStartPicker(true)}>
+                    <Text style={styles.dateButtonText}>{formatDateInput(startDate)}</Text>
+                  </Pressable>
+                  {showStartPicker && (
+                    <DateTimePicker
+                      value={startDate}
+                      mode="date"
+                      display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                      onChange={(_, selected) => {
+                        if (Platform.OS !== 'ios') {
+                          setShowStartPicker(false);
+                        }
+                        if (selected) {
+                          setStartDate(selected);
+                        }
+                      }}
+                    />
+                  )}
+                </>
+              )}
+            </View>
+            <View style={styles.dateField}>
+              <Text style={styles.filterLabel}>End date</Text>
+              {Platform.OS === 'web' && WebDatePicker ? (
+                <WebDatePicker
+                  selected={endDate}
+                  onChange={(date: Date | null) => date && setEndDate(date)}
+                  dateFormat="yyyy-MM-dd"
+                  customInput={<WebDateInput />}
+                />
+              ) : (
+                <>
+                  <Pressable style={styles.dateButton} onPress={() => setShowEndPicker(true)}>
+                    <Text style={styles.dateButtonText}>{formatDateInput(endDate)}</Text>
+                  </Pressable>
+                  {showEndPicker && (
+                    <DateTimePicker
+                      value={endDate}
+                      mode="date"
+                      display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                      onChange={(_, selected) => {
+                        if (Platform.OS !== 'ios') {
+                          setShowEndPicker(false);
+                        }
+                        if (selected) {
+                          setEndDate(selected);
+                        }
+                      }}
+                    />
+                  )}
+                </>
+              )}
+            </View>
+          </View>
+
+          <Pressable
+            style={[
+              styles.primaryButton,
+              isSmallScreen && styles.primaryButtonCompact,
+              !canDownload && styles.primaryButtonDisabled,
+            ]}
+            onPress={handleDownload}
+            disabled={!canDownload}
+          >
             <View style={styles.primaryButtonContent}>
               <Text style={[styles.primaryButtonText, isSmallScreen && styles.primaryButtonTextCompact]}>
                 Download .ics Calendar
@@ -379,9 +518,8 @@ export default function App() {
               <Text style={styles.primaryButtonHint}>Works with Google, Apple, Outlook</Text>
             </View>
           </Pressable>
-
-          <Text style={styles.helperText}>
-            The download includes weekly recurring events from the timetable and uses your local timezone.
+          <Text style={[styles.helperText, dateRangeError && styles.helperTextError]}>
+            {dateRangeError || 'The download includes weekly recurring events from the timetable and uses your local timezone.'}
           </Text>
         </View>
 
@@ -632,6 +770,33 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0f172a',
   },
+  dateRangeRow: {
+    marginTop: 16,
+    flexDirection: 'row',
+    gap: 16,
+    flexWrap: 'wrap',
+  },
+  dateRangeRowCompact: {
+    flexDirection: 'column',
+  },
+  dateField: {
+    flex: 1,
+    gap: 8,
+    minWidth: 220,
+  },
+  dateButton: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#ffffff',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: 'flex-start',
+  },
+  dateButtonText: {
+    fontSize: 14,
+    color: '#0f172a',
+  },
   primaryButton: {
     marginTop: 18,
     paddingVertical: 14,
@@ -642,6 +807,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
+  },
+  primaryButtonDisabled: {
+    opacity: 0.6,
   },
   primaryButtonCompact: {
     marginTop: 14,
@@ -670,6 +838,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#475569',
     lineHeight: 18,
+  },
+  helperTextError: {
+    color: '#b91c1c',
   },
   emptyState: {
     color: '#64748b',
